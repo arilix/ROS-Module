@@ -1,0 +1,16 @@
+# =============================================================
+# Contoh file konfigurasi parameter ROS 2
+# Digunakan oleh node location_publisher (modul 05)
+#
+# Cara pakai:
+#   ros2 run simple_location_cpp location_publisher \
+#     --ros-args --params-file config/config.yaml
+#
+# Ubah nilai di bawah tanpa perlu rebuild workspace.
+# =============================================================
+
+/**:
+  ros__parameters:
+    current_location: 100.0
+    goal_location: 500.0
+    speed: 10.0
