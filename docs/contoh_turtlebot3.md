@@ -344,17 +344,4 @@ ros2 run turtlebot3_square_mission square_mission
 
 ---
 
-## Referensi Perbandingan dengan Misi Drone (MAVROS)
-
-> Soal ini diadaptasi dari mission challenge drone. Berikut perbedaannya:
-
-| Aspek           | Drone (MAVROS)                     | TurtleBot3 (Ground Robot)              |
-|-----------------|------------------------------------|----------------------------------------|
-| Posisi          | `/mavros/local_position/pose`      | `/odom`                                |
-| Perintah gerak  | `setpoint_position`                | `/cmd_vel` (Twist)                     |
-| Mode            | GUIDED → LAND                      | Tidak ada mode (langsung stop)         |
-| Dimensi         | 3D (x, y, z)                       | 2D (x, y) — robot di lantai           |
-| Navigasi        | Set coordinate langsung            | Rotate + move (differential drive)     |
-| Emergency       | Ganti mode ke STABILIZE            | Publish `/emergency_stop`              |
-
 **Selamat mengerjakan!**
