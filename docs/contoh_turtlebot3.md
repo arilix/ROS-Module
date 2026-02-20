@@ -178,27 +178,39 @@ ros2 run turtlebot3_teleop teleop_keyboard
 
 > Adaptasi dari misi drone MAVROS — dikonversi ke TurtleBot3 (ground robot).
 
-## Objektif Utama
+## Soal
 
-Mengembangkan script Python untuk melakukan **misi navigasi otonom** membentuk **pola persegi sempurna (2x2 meter)** menggunakan TurtleBot3 di Gazebo. Setelah kembali ke titik awal, robot berhenti secara otomatis.
+Pada contoh di atas, TurtleBot3 dikendalikan secara **manual menggunakan teleop keyboard**. Sekarang tantangannya:
 
-## Logic Requirement: "Distance-Based Waypoint"
+> **Buatlah script Python yang membuat TurtleBot3 bergerak secara OTONOM (tanpa teleop) membentuk pola persegi sempurna (2x2 meter) di Gazebo, lalu berhenti otomatis setelah kembali ke titik awal.**
 
-- Script **TIDAK BOLEH** hanya menggunakan `time.sleep()`
-- Script harus terus menghitung jarak antara posisi robot saat ini (`/odom`) dengan koordinat target
+### Yang Harus Kamu Buat:
+
+1. **Buat package ROS** (pilih ROS 1 atau ROS 2) bernama `turtlebot3_square_mission`
+2. **Buat script Python** yang menjadi pengganti teleop — robot jalan sendiri tanpa input keyboard
+3. **Buat launch file** untuk menjalankan Gazebo + script mission sekaligus
+
+---
+
+## Ketentuan & Constraint
+
+### Logic Requirement: "Distance-Based Waypoint"
+
+- Script **TIDAK BOLEH** hanya menggunakan `time.sleep()` untuk berpindah waypoint
+- Script harus terus **menghitung jarak** antara posisi robot saat ini (`/odom`) dengan koordinat target
 - **Threshold**: Target dianggap tercapai jika jarak (Euclidean distance) sudah **< 0.3 meter**
 - **Action**: Baru setelah threshold terpenuhi, script mengirimkan koordinat waypoint berikutnya
 
-## Technical Constraints
+### Technical Constraints
 
 | Constraint     | Detail                                                    |
 |----------------|-----------------------------------------------------------|
-| Frequency      | Script wajib mengirim `/cmd_vel` pada frekuensi **20Hz** |
-| Safety         | Jika `/emergency_stop` bernilai `True`, script berhenti  |
+| Frequency      | Script wajib mengirim `/cmd_vel` pada frekuensi **10Hz - 20Hz** |
+| Safety         | Jika `/emergency_stop` bernilai `True`, script harus berhenti  |
 | Pola           | Persegi 2x2 meter (4 waypoints)                          |
 | Navigasi       | Rotate-then-move ke setiap waypoint                      |
 
-## Waypoints (Relatif dari Posisi Awal)
+### Waypoints yang Harus Dilalui (Relatif dari Posisi Awal)
 
 ```
 WP1: (2.0, 0.0)  → maju 2m ke depan
@@ -219,126 +231,122 @@ WP4: (0.0, 0.0)  → kembali ke titik awal
 
 ---
 
-## Cara Pakai: ROS 1 Noetic
+## Hints & Panduan
 
-### 1. Build Workspace
+### Topic yang Digunakan
 
-```bash
-cd workspace/ros1_ws
-catkin_make
-source devel/setup.bash
+| Topic              | Tipe Pesan              | Fungsi                                 |
+|--------------------|-------------------------|----------------------------------------|
+| `/odom`            | `nav_msgs/Odometry`     | Membaca posisi & orientasi robot       |
+| `/cmd_vel`         | `geometry_msgs/Twist`   | Mengirim perintah gerak (linear & angular) |
+| `/emergency_stop`  | `std_msgs/Bool`         | Safety — subscribe untuk berhenti      |
+
+### Rumus yang Dibutuhkan
+
+**Euclidean Distance** (untuk cek apakah sudah sampai waypoint):
+```python
+distance = sqrt((target_x - current_x)**2 + (target_y - current_y)**2)
 ```
 
-### 2. Terminal 1 — Jalankan Gazebo (Empty World)
+**Angle to Target** (untuk menentukan arah belok):
+```python
+angle = atan2(target_y - current_y, target_x - current_x)
+```
 
+**Quaternion ke Yaw** (orientasi dari `/odom` berbentuk quaternion, perlu dikonversi):
+- ROS 1: gunakan `tf.transformations.euler_from_quaternion()`
+- ROS 2: buat fungsi sendiri atau gunakan library `transforms3d`
+
+### Algoritma yang Disarankan
+
+```
+untuk setiap waypoint:
+  1. ROTATE: putar robot sampai menghadap target
+     - hitung angle_diff = target_angle - current_yaw
+     - publish angular.z sampai angle_diff < threshold
+  2. MOVE: maju ke target
+     - publish linear.x sambil koreksi angular.z
+     - hitung euclidean_distance setiap loop
+     - berhenti jika distance < 0.3 meter
+  3. lanjut ke waypoint berikutnya
+```
+
+---
+
+## Struktur Package yang Diharapkan
+
+### Jika Pakai ROS 1 (Noetic)
+
+```
+ros1_ws/
+└── src/
+    └── turtlebot3_square_mission/
+        ├── CMakeLists.txt
+        ├── package.xml
+        ├── launch/
+        │   └── square_mission.launch
+        └── scripts/
+            └── square_mission.py        ← Script utama (rospy)
+```
+
+**Cara test:**
 ```bash
+# Terminal 1: Gazebo
 export TURTLEBOT3_MODEL=burger
 roslaunch turtlebot3_gazebo turtlebot3_empty_world.launch
-```
 
-### 3. Terminal 2 — Jalankan Square Mission
-
-```bash
+# Terminal 2: Mission script
 source devel/setup.bash
 rosrun turtlebot3_square_mission square_mission.py
 ```
 
-### Atau Pakai Launch File (Gazebo + Mission sekaligus)
+### Jika Pakai ROS 2 (Foxy / Humble)
 
-```bash
-source devel/setup.bash
-roslaunch turtlebot3_square_mission square_mission.launch
+```
+ros2_ws/
+└── src/
+    └── turtlebot3_square_mission/
+        ├── package.xml
+        ├── setup.py
+        ├── setup.cfg
+        ├── launch/
+        │   └── square_mission.launch.py
+        ├── resource/
+        │   └── turtlebot3_square_mission
+        └── turtlebot3_square_mission/
+            ├── __init__.py
+            └── square_mission.py        ← Script utama (rclpy)
 ```
 
-### Emergency Stop (Opsional)
-
-Dari terminal lain, publish emergency stop:
+**Cara test:**
 ```bash
-rostopic pub /emergency_stop std_msgs/Bool "data: true" --once
-```
-
----
-
-## Cara Pakai: ROS 2 Foxy / Humble
-
-### 1. Build Workspace
-
-```bash
-cd workspace/ros2_ws
-colcon build --packages-select turtlebot3_square_mission
-source install/setup.bash
-```
-
-### 2. Terminal 1 — Jalankan Gazebo (Empty World)
-
-```bash
+# Terminal 1: Gazebo
 export TURTLEBOT3_MODEL=burger
 ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
-```
 
-### 3. Terminal 2 — Jalankan Square Mission
-
-```bash
+# Terminal 2: Mission script
 source install/setup.bash
 ros2 run turtlebot3_square_mission square_mission
 ```
 
-### Atau Pakai Launch File (Gazebo + Mission sekaligus)
+---
 
-```bash
-source install/setup.bash
-ros2 launch turtlebot3_square_mission square_mission.launch.py
-```
+## Kriteria Penilaian
 
-### Custom Parameter
-
-```bash
-ros2 run turtlebot3_square_mission square_mission \
-  --ros-args \
-  -p side_length:=3.0 \
-  -p threshold:=0.2 \
-  -p linear_speed:=0.3
-```
-
-### Emergency Stop (Opsional)
-
-Dari terminal lain, publish emergency stop:
-```bash
-ros2 topic pub /emergency_stop std_msgs/msg/Bool "{data: true}" --once
-```
+| Kriteria                                        | Bobot |
+|-------------------------------------------------|-------|
+| Robot berhasil membentuk pola persegi 2x2m      | 30%   |
+| Menggunakan distance-based waypoint (bukan sleep) | 25%   |
+| Frekuensi publish `/cmd_vel` sesuai (10-20Hz)   | 15%   |
+| Ada logika emergency stop                        | 10%   |
+| Robot kembali ke titik awal dan berhenti otomatis | 10%  |
+| Kode bersih, ada komentar, dan bisa di-build     | 10%  |
 
 ---
 
-## Struktur File
+## Referensi Perbandingan dengan Misi Drone (MAVROS)
 
-```
-workspace/
-├── ros1_ws/
-│   └── src/
-│       └── turtlebot3_square_mission/
-│           ├── CMakeLists.txt
-│           ├── package.xml
-│           ├── launch/
-│           │   └── square_mission.launch
-│           └── scripts/
-│               └── square_mission.py        ← Script utama (rospy)
-│
-└── ros2_ws/
-    └── src/
-        └── turtlebot3_square_mission/
-            ├── package.xml
-            ├── setup.py
-            ├── setup.cfg
-            ├── launch/
-            │   └── square_mission.launch.py
-            ├── resource/
-            │   └── turtlebot3_square_mission
-            └── turtlebot3_square_mission/
-                ├── __init__.py
-                └── square_mission.py        ← Script utama (rclpy)
-```
-
-## Perbedaan dengan Misi Drone (MAVROS)
+> Soal ini diadaptasi dari mission challenge drone. Berikut perbedaannya:
 
 | Aspek           | Drone (MAVROS)                     | TurtleBot3 (Ground Robot)              |
 |-----------------|------------------------------------|----------------------------------------|
@@ -348,3 +356,5 @@ workspace/
 | Dimensi         | 3D (x, y, z)                       | 2D (x, y) — robot di lantai           |
 | Navigasi        | Set coordinate langsung            | Rotate + move (differential drive)     |
 | Emergency       | Ganti mode ke STABILIZE            | Publish `/emergency_stop`              |
+
+**Selamat mengerjakan!**
